@@ -1,6 +1,8 @@
 //=============================================================================
 //SRPG_Pathfinding.js
 //=============================================================================
+// Shoukang edit version (I plan to improve its performance and make it 100% compatible with the SRPG-Core, haven't start)
+//=============================================================================
 /*:
  * @plugindesc Adjusts pathfinding algorithm for determining where units should move when no valid target. Requires SRPG_AIControl.js and SRPG_RangeControl.js
  * @author Boomy 
