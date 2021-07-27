@@ -71,7 +71,7 @@
     var _standardX = parameters['standard X'] || 'Graphics.width / 2';
     var _xRange = parameters['x range'] || 'Graphics.width - 360';
     var _yRange = parameters['y range'] || 'Graphics.height / 3.5';
-    var _tilt = Number(parameters['tilt']) || 0.2;
+    var _tilt = Number(parameters['tilt']);
 
     var coreParameters = PluginManager.parameters('SRPG_core');
     var _srpgTroopID = Number(coreParameters['srpgTroopID'] || 1);
@@ -86,7 +86,7 @@
 
     var _SRPG_Sprite_Actor_setActorHome = Sprite_Actor.prototype.setActorHome;
     Sprite_Actor.prototype.setActorHome = function (index) {
-        if ($gameSystem.isSRPGMode() == true && $gameTemp.areaTargets().length > 0) {
+        if ($gameSystem.isSRPGMode() == true && !$gameSystem.useMapBattle() && $gameTemp.areaTargets().length > 0) {
             var param = $gameTemp._aoePositionParameters;
             var battler = this._battler;
             this.setHome(eval(_standardX) + (battler.aoeX - param.midX) * param.amplifyX,
@@ -100,7 +100,7 @@
     //Set enemy positions
     var _SRPG_Game_Troop_setup = Game_Troop.prototype.setup;
     Game_Troop.prototype.setup = function(troopId) {
-        if ($gameSystem.isSRPGMode() == true && $gameTemp.areaTargets().length > 0) {
+        if ($gameSystem.isSRPGMode() == true && !$gameSystem.useMapBattle() && $gameTemp.areaTargets().length > 0) {
             this.clear();
             this._troopId = troopId;
             this._enemies = [];
