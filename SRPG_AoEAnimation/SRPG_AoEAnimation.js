@@ -6,25 +6,30 @@
  * @author Boomy
  * 
  * @param standard X
- * @desc The center X position in battle scene
- * @default  Graphics.width / 2
+ * @desc The center X position in battle scene, default Graphics.width / 2
+ * @default Graphics.width / 2
  * 
  * @param standard Y
- * @desc The center Y position in battle scene
- * @default   Graphics.height / 2 + 48
+ * @desc The center Y position in battle scene, default Graphics.height / 2 + 48
+ * @default Graphics.height / 2 + 48
  * 
  * @param x range
- * @desc x direction battler placement range in battle scene.
- * @default  Graphics.width - 360
+ * @desc x direction battler placement range in battle scene, default Graphics.width - 360
+ * @default Graphics.width - 360
  *
  * @param y range
- * @desc y direction battler placement range in battle scene.
- * @default  Graphics.height / 3.5
+ * @desc y direction battler placement range in battle scene, default Graphics.height / 3.5
+ * @default Graphics.height / 3.5
  * 
  * @param tilt
- * @desc parameter that tilt x direction placement to simulate a 3D view
- * @default  0.2
- *  
+ * @desc parameter that tilt x direction placement to simulate a 3D view, default 0.2
+ * @default 0.2
+ *
+ * @param allow surrounding
+ * @desc if disabled skill user will never be surrounded by targets. Help avoid overlap
+ * @type boolean
+ * @default true
+ *
  * @help
  * This plugin is a work in progress!
  * Credits to: Dopan, Dr. Q, Traverse, SoulPour777
@@ -66,6 +71,7 @@
     var _xRange = parameters['x range'] || 'Graphics.width - 360';
     var _yRange = parameters['y range'] || 'Graphics.height / 3.5';
     var _tilt = Number(parameters['tilt']);
+    var _surround = !!eval(parameters['allow surrounding']);
 
     var coreParameters = PluginManager.parameters('SRPG_core');
     var _srpgTroopID = Number(coreParameters['srpgTroopID'] || 1);
@@ -122,20 +128,26 @@
         var maxX = 0.5;
         var minY = -1;
         var maxY = 1;
+        var targetMinX = 0.5
 
-        for (var i in allEvents){
+        for (var i = 0; i < allEvents.length; i++){
             var battler = $gameSystem.EventToUnit(allEvents[i].eventId())[1];
             var posX = allEvents[i].posX() - activeEvent.posX();
             var posY = allEvents[i].posY() - activeEvent.posY();
             var projectionY = (vectorY * posX - vectorX * posY) / vectorLen;
             var projectionX = _tilt * projectionY + (vectorX * posX + vectorY * posY) / vectorLen; //0.2 * sin helps to make a better veiw.
             battler.setAoEScenePosition(projectionX, projectionY)
+            if (i > 0) targetMinX = Math.min(projectionX, targetMinX);
             minX = Math.min(projectionX, minX);
             minY = Math.min(projectionY, minY);
             maxX = Math.max(projectionX, maxX);
             maxY = Math.max(projectionY, maxY);
         }
 
+        if (!_surround && targetMinX < 0.5){
+            minX -= Math.max((maxX - minX) / 2, 0.5)
+            $gameSystem.EventToUnit(activeEvent.eventId())[1].setAoEScenePosition(minX, 0)
+        }
         var direction = $gameSystem.EventToUnit(activeEvent.eventId())[0] === 'actor' ? -1 : 1;
         var amplifyX = direction * eval(_xRange) / Math.max((maxX - minX), 2);
         var amplifyY = eval(_yRange) / (maxY - minY);
@@ -201,8 +213,8 @@
 //helper function
     Game_Temp.prototype.getAreaEvents = function() {
         events = []
-        for (var i in this._areaTargets) {
-            events.push(this._areaTargets[i].event);
+        for (var i = 0; i < this._areaTargets.length; i ++ ) {
+            if (this._areaTargets[i].event) events.push(this._areaTargets[i].event);
         }
         return events;
     };
@@ -225,7 +237,7 @@
             this.setBattlerPosition();
         }
 
-        for (var i in targetEvents) {
+        for (var i = 0; i < targetEvents.length; i++) {
             var target = $gameSystem.EventToUnit(targetEvents[i].eventId())[1]
             if (user === target){
                 user.action(0).setTarget(0);
