@@ -35,11 +35,8 @@
  *
  * Important Tips:
  * With this plugin, it's necessary to set skill target to all enemies/friends (or random 2, 3 ,4 ... enemies/friends) to make AoEs work properly.
- * There are some wired behaviours caused by SRPG_AoE, which has nothing to do with this plugin:
+ * There is a wired behavious that needs to be implemented:
  * 1. Counter attack distance not calculated properly.
- * 2. Enemy cast AoE without target in the AoE center can't get recognize all the targets in AoE area.
- * The above issues can be fixed with this: 
- * https://forums.rpgmakerweb.com/index.php?threads/srpg-engine-plugins-for-creating-turn-based-strategy-game.110366/page-84#post-1202802
  *
  * Once you find anything weird, try to turn of this plugin and see if it happens again. This will help us identify which plugin causes the error.
  * ==================================================================================================
@@ -125,7 +122,7 @@
         var vectorY = this.createSrpgAoEVector()[1];
         var vectorLen = Math.sqrt(vectorX * vectorX + vectorY * vectorY);
         var minX = 0;
-        var maxX = 1;
+        var maxX = 0.8;
         var minY = -1;
         var maxY = 1;
 
@@ -221,7 +218,9 @@
         this.pushSrpgBattler(userType, user);
         if (userType === 'enemy') user.action(0).setSrpgEnemySubject(0);
 
-        if($gameTemp.areaTargets().length > 0) this.setBattlerPosition();
+        if($gameTemp.areaTargets().length > 0) {
+            this.setBattlerPosition();
+        }
 
         for (var i in targetEvents) {
             var target = $gameSystem.EventToUnit(targetEvents[i].eventId())[1]
@@ -238,8 +237,16 @@
                 target.srpgMakeNewActions();
                 if (targetType === 'enemy') target.action(0).setSrpgEnemySubject(0);
                 target.action(0).setAttack();
-                target.action(0).setTarget(0);
-                target.setActionTiming(1);
+                //shoukang: not a conplete fix for attack distance. Need to fix canUse function directly in core or it will be very handy
+                var item = target.action(0).item();
+                var distance = $gameSystem.unitDistance($gameTemp.activeEvent(), targetEvents[i]);
+                //console.log(distance, $gameTemp.SrpgDistance(), target.action(0), item)
+                if (!item || target.srpgSkillRange(item) < distance || target.srpgSkillMinRange(item) > distance){
+                    target.clearActions();
+                } else{
+                    target.action(0).setTarget(0);
+                    target.setActionTiming(1);
+                }
             }
         }
 
@@ -342,6 +349,26 @@
 //============================================================================================
 //Override these functions to support AoEAnimation
 //============================================================================================
+
+    // var _SRPG_Game_BattlerBase_canUse = Game_BattlerBase.prototype.canUse;
+    // Game_BattlerBase.prototype.canUse = function(item) {
+    //     if ($gameSystem.isSRPGMode() == true && item && $gameTemp.areaTargets()) {
+    //         if (($gameSystem.isSubBattlePhase() === 'invoke_action' ||
+    //              $gameSystem.isSubBattlePhase() === 'auto_actor_action' ||
+    //              $gameSystem.isSubBattlePhase() === 'enemy_action' ||
+    //              $gameSystem.isSubBattlePhase() === 'battle_window') &&
+    //             (this.srpgSkillRange(item) < $gameTemp.SrpgDistance() ||
+    //             this.srpgSkillMinRange(item) > $gameTemp.SrpgDistance() ||
+    //             this.SrpgSpecialRange(item) == false ||
+    //             (this._srpgActionTiming == 1 && this.srpgWeaponCounter() == false) ||
+    //             (item.meta.notUseAfterMove && ($gameTemp.originalPos()[0] != $gameTemp.activeEvent().posX() ||
+    //              $gameTemp.originalPos()[1] != $gameTemp.activeEvent().posY()))
+    //             )) {
+    //             return false;
+    //         }
+    //     }
+    //     return _SRPG_Game_BattlerBase_canUse.call(this, item);
+    // };
 
 // shoukang rewrite to give a clearer logic
     Scene_Battle.prototype.createSprgBattleStatusWindow = function() {
