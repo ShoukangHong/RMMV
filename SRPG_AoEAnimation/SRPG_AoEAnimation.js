@@ -133,7 +133,7 @@
             var battler = $gameSystem.EventToUnit(allEvents[i].eventId())[1];
             var posX = allEvents[i].posX() - activeEvent.posX();
             var posY = allEvents[i].posY() - activeEvent.posY();
-            var projectionY = (Math.abs(vectorX) * posY + vectorY * posX) / vectorLen;
+            var projectionY = (vectorY * posX - vectorX * posY) / vectorLen;
             var projectionX = _tilt * projectionY + (vectorX * posX + vectorY * posY) / vectorLen; //0.2 * sin helps to make a better veiw.
             battler.setAoEScenePosition(projectionX, projectionY)
             minX = Math.min(projectionX, minX);
