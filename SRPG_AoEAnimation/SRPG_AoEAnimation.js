@@ -35,9 +35,6 @@
  *
  * Important Tips:
  * With this plugin, it's necessary to set skill target to all enemies/friends (or random 2, 3 ,4 ... enemies/friends) to make AoEs work properly.
- * There is a wired behavious that needs to be implemented:
- * 1. Counter attack distance not calculated properly.
- *
  * Once you find anything weird, try to turn of this plugin and see if it happens again. This will help us identify which plugin causes the error.
  * ==================================================================================================
  * Positions battlers in Battle scene:
@@ -53,7 +50,7 @@
  * [ T U .]    ========================>    [ . . U] when user is actor, [ U . .] when user is enemy.
  * [ . . .]                                 [ T . .]                     [ . . T]
  *
- * The placement will automatically adjust battlers' distance to make them as far as possible.(within the defined x and y range)
+ * The placement will automatically adjust battlers' distance to make them reasonable.(within the defined x and y range)
  * ===================================================================================================
  * Compatibility:
  * Need SRPG_AoE, and place this plugin below it.
@@ -122,7 +119,7 @@
         var vectorY = this.createSrpgAoEVector()[1];
         var vectorLen = Math.sqrt(vectorX * vectorX + vectorY * vectorY);
         var minX = 0;
-        var maxX = 0.8;
+        var maxX = 0.5;
         var minY = -1;
         var maxY = 1;
 
@@ -140,7 +137,7 @@
         }
 
         var direction = $gameSystem.EventToUnit(activeEvent.eventId())[0] === 'actor' ? -1 : 1;
-        var amplifyX = direction * eval(_xRange) / (maxX - minX);
+        var amplifyX = direction * eval(_xRange) / Math.max((maxX - minX), 2);
         var amplifyY = eval(_yRange) / (maxY - minY);
         $gameTemp.setAoEPositionParameters((minX + maxX) / 2, (minY + maxY) / 2, amplifyX, amplifyY);
     }
@@ -195,7 +192,10 @@
 //helper function
     Scene_Map.prototype.pushSrpgBattler = function(type, battler){
         if (type === 'actor') $gameParty.pushSrpgBattleActors(battler);
-        else if (type === 'enemy') $gameTroop.pushSrpgBattleEnemys(battler);
+        else if (type === 'enemy') {
+            $gameTroop.pushSrpgBattleEnemys(battler);
+            $gameTroop.pushMembers(battler);
+        }
     }
 
 //helper function
@@ -215,8 +215,11 @@
         var targetEvents = [$gameTemp.targetEvent()].concat($gameTemp.getAreaEvents());
         $gameParty.clearSrpgBattleActors();
         $gameTroop.clearSrpgBattleEnemys();
+        $gameTroop._enemies = [];
         this.pushSrpgBattler(userType, user);
-        if (userType === 'enemy') user.action(0).setSrpgEnemySubject(0);
+        if (userType === 'enemy') {
+            user.action(0).setSrpgEnemySubject($gameTroop.members().length - 1);
+        }
 
         if($gameTemp.areaTargets().length > 0) {
             this.setBattlerPosition();
@@ -235,18 +238,16 @@
             }
             if (userType !== targetType && target.canMove() && !user.currentAction().item().meta.srpgUncounterable) {
                 target.srpgMakeNewActions();
-                if (targetType === 'enemy') target.action(0).setSrpgEnemySubject(0);
+                if (targetType === 'enemy') {
+                    target.action(0).setSrpgEnemySubject($gameTroop.members().length - 1);
+                }
                 target.action(0).setAttack();
-                //shoukang: not a conplete fix for attack distance. Need to fix canUse function directly in core or it will be very handy
                 var item = target.action(0).item();
                 var distance = $gameSystem.unitDistance($gameTemp.activeEvent(), targetEvents[i]);
-                //console.log(distance, $gameTemp.SrpgDistance(), target.action(0), item)
-                if (!item || target.srpgSkillRange(item) < distance || target.srpgSkillMinRange(item) > distance){
-                    target.clearActions();
-                } else{
-                    target.action(0).setTarget(0);
-                    target.setActionTiming(1);
-                }
+                //console.log(distance, target)
+                target.setAoEDistance(distance);
+                target.action(0).setTarget(0);
+                target.setActionTiming(1);
             }
         }
 
@@ -350,25 +351,46 @@
 //Override these functions to support AoEAnimation
 //============================================================================================
 
-    // var _SRPG_Game_BattlerBase_canUse = Game_BattlerBase.prototype.canUse;
-    // Game_BattlerBase.prototype.canUse = function(item) {
-    //     if ($gameSystem.isSRPGMode() == true && item && $gameTemp.areaTargets()) {
-    //         if (($gameSystem.isSubBattlePhase() === 'invoke_action' ||
-    //              $gameSystem.isSubBattlePhase() === 'auto_actor_action' ||
-    //              $gameSystem.isSubBattlePhase() === 'enemy_action' ||
-    //              $gameSystem.isSubBattlePhase() === 'battle_window') &&
-    //             (this.srpgSkillRange(item) < $gameTemp.SrpgDistance() ||
-    //             this.srpgSkillMinRange(item) > $gameTemp.SrpgDistance() ||
-    //             this.SrpgSpecialRange(item) == false ||
-    //             (this._srpgActionTiming == 1 && this.srpgWeaponCounter() == false) ||
-    //             (item.meta.notUseAfterMove && ($gameTemp.originalPos()[0] != $gameTemp.activeEvent().posX() ||
-    //              $gameTemp.originalPos()[1] != $gameTemp.activeEvent().posY()))
-    //             )) {
-    //             return false;
-    //         }
-    //     }
-    //     return _SRPG_Game_BattlerBase_canUse.call(this, item);
-    // };
+    Game_Battler.prototype.setAoEDistance = function(val){
+        this._AoEDistance = val;
+    }
+
+    Game_Battler.prototype.AoEDistance = function(){
+        return this._AoEDistance;
+    }
+
+    Game_Battler.prototype.clearAoEDistance = function(){
+        this._AoEDistance = undefined;
+    }
+
+    var _Game_Actor_srpgSkillMinRange = Game_Actor.prototype.srpgSkillMinRange
+    Game_Actor.prototype.srpgSkillMinRange = function(skill) {
+        var range = _Game_Actor_srpgSkillMinRange.call(this, skill);
+        if (this.AoEDistance() !== undefined) return this.AoEDistance() >= range ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+        else return range;
+    };
+
+    var _Game_Enemy_srpgSkillMinRange = Game_Enemy.prototype.srpgSkillMinRange
+    Game_Enemy.prototype.srpgSkillMinRange = function(skill) {
+        var range = _Game_Enemy_srpgSkillMinRange.call(this, skill);
+        if (this.AoEDistance() !== undefined) return this.AoEDistance() >= range ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+        else return range;
+    };
+
+    var _Game_Actor_srpgSkillRange = Game_Actor.prototype.srpgSkillRange
+    Game_Actor.prototype.srpgSkillRange = function(skill) {
+        var range = _Game_Actor_srpgSkillRange.call(this, skill);
+        if (this.AoEDistance() !== undefined) return this.AoEDistance() > range ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+        else return range;
+    };
+
+    var _Game_Enemy_srpgSkillRange = Game_Enemy.prototype.srpgSkillRange
+    Game_Enemy.prototype.srpgSkillRange = function(skill) {
+        var range = _Game_Enemy_srpgSkillRange.call(this, skill);
+        //console.log(this, range)
+        if (this.AoEDistance() !== undefined) return this.AoEDistance() > range ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+        else return range;
+    };
 
 // shoukang rewrite to give a clearer logic
     Scene_Battle.prototype.createSprgBattleStatusWindow = function() {
@@ -405,6 +427,7 @@
             for (var i in allEvents){
                 var event = allEvents[i];
                 var battler = $gameSystem.EventToUnit(event.eventId())[1];
+                battler.clearAoEDistance();
                 if ( i > 0 && event === activeEvent) continue; //active event occurs again, ignore
                 battler.setActionTiming(-1);
                 if (battler && battler.isDead() && !event.isErased()) {
