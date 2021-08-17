@@ -1,5 +1,6 @@
 //=============================================================================
 //SRPG_AoEAnimation.js
+// recent updates: fix a bug caused by max party member, fix the bug of sprite priority in battle.
 //=============================================================================
 /*:
  * @plugindesc Allows AoE skills to show once when targetting multiple targets. Requires SRPG_AoE.js This is a modified version by Shoukang
@@ -26,7 +27,7 @@
  * @default 0.2
  *
  * @param allow surrounding
- * @desc if disabled skill user will never be surrounded by targets. Help avoid overlap
+ * @desc if disabled skill user will never be surrounded by targets. See help for detail
  * @type boolean
  * @default true
  *
@@ -40,6 +41,8 @@
  *
  * Important Tips:
  * With this plugin, it's necessary to set skill target to all enemies/friends (or random 2, 3 ,4 ... enemies/friends) to make AoEs work properly.
+ * If you allow surrounding and you use dynamic motion, actor sprite priority may become weird while casting skills, to avoid this, set the plugin parameter
+ * 'usePriority' in dynamic motion to false.
  * Once you find anything weird, try to turn of this plugin and see if it happens again. This will help us identify which plugin causes the error.
  * ==================================================================================================
  * Positions battlers in Battle scene:
@@ -117,18 +120,19 @@
         }
     };
 
-// shoukang: vector calculation to determine the battler placement parameters and relative position.
+// shoukang: complicated vector calculation to determine the battler placement parameters and relative position.
     Scene_Map.prototype.setBattlerPosition = function(){
         var activeEvent = $gameTemp.activeEvent();
         var allEvents = [activeEvent, $gameTemp.targetEvent()].concat($gameTemp.getAreaEvents());
-        var vectorX = this.createSrpgAoEVector()[0];
-        var vectorY = this.createSrpgAoEVector()[1];
+        var vector =  this.createSrpgAoEVector();
+        var vectorX = vector[0];
+        var vectorY = vector[1];
         var vectorLen = Math.sqrt(vectorX * vectorX + vectorY * vectorY);
         var minX = 0;
         var maxX = 0.5;
         var minY = -1;
         var maxY = 1;
-        var targetMinX = 0.5
+        var targetMinX = 0.5;
 
         for (var i = 0; i < allEvents.length; i++){
             var battler = $gameSystem.EventToUnit(allEvents[i].eventId())[1];
@@ -145,8 +149,8 @@
         }
 
         if (!_surround && targetMinX < 0.5){
-            minX -= Math.max((maxX - minX) / 2, 0.5)
-            $gameSystem.EventToUnit(activeEvent.eventId())[1].setAoEScenePosition(minX, 0)
+            minX -= Math.max((maxX - targetMinX) / 2, 0.5);
+            $gameSystem.EventToUnit(activeEvent.eventId())[1].setAoEScenePosition(minX, 0);
         }
         var direction = $gameSystem.EventToUnit(activeEvent.eventId())[0] === 'actor' ? -1 : 1;
         var amplifyX = direction * eval(_xRange) / Math.max((maxX - minX), 2);
@@ -362,7 +366,11 @@
 //============================================================================================
 //Override these functions to support AoEAnimation
 //============================================================================================
-
+    var _Game_Party_maxBattleMembers = Game_Party.prototype.maxBattleMembers
+    Game_Party.prototype.maxBattleMembers = function() {
+        if ($gameSystem.isSRPGMode() && $gameTemp.areaTargets().length > 0) return $gameParty.SrpgBattleActors().length;
+        else return _Game_Party_maxBattleMembers.call(this);
+    };
     Game_Battler.prototype.setAoEDistance = function(val){
         this._AoEDistance = val;
     }
@@ -404,6 +412,15 @@
         else return range;
     };
 
+    var _Spriteset_Battle_createLowerLayer = Spriteset_Battle.prototype.createLowerLayer;
+    Spriteset_Battle.prototype.createLowerLayer = function() {
+        _Spriteset_Battle_createLowerLayer.call(this);
+        this._battleField.removeChild(this._back1Sprite);
+        this._battleField.removeChild(this._back2Sprite);
+        this._battleField.children.sort(this.compareEnemySprite.bind(this));
+        this._battleField.addChildAt(this._back2Sprite, 0);
+        this._battleField.addChildAt(this._back1Sprite, 0);
+    };
 // shoukang rewrite to give a clearer logic
     Scene_Battle.prototype.createSprgBattleStatusWindow = function() {
         this._srpgBattleStatusWindowLeft = new Window_SrpgBattleStatus(0);
