@@ -1,10 +1,11 @@
 //=============================================================================
 //SRPG_AoEAnimation.js
 // recent updates: fix a bug caused by max party member, fix the bug of sprite priority in battle.
+// v 1.00
 //=============================================================================
 /*:
  * @plugindesc Allows AoE skills to show once when targetting multiple targets. Requires SRPG_AoE.js This is a modified version by Shoukang
- * @author Boomy
+ * @author Boomy, Shoukang
  * 
  * @param standard X
  * @desc The center X position in battle scene, default Graphics.width / 2
